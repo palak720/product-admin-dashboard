@@ -35,3 +35,9 @@ export async function getCategories() {
     typeof c === "string" ? { slug: c, name: c } : { slug: c.slug, name: c.name }
   );
 }
+// GET /products/{id}
+// Galat id par API 404 deti hai, jo Axios interceptor error.status = 404 bana deta hai
+export async function getProductById(id, { signal } = {}) {
+  const { data } = await api.get(`/products/${id}`, { signal });
+  return data;
+}

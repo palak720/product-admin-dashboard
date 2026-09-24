@@ -35,3 +35,10 @@ export function getSortParams(value) {
   if (!option || !option.sortBy) return {};
   return { sortBy: option.sortBy, order: option.order };
 }
+
+// "5" -> 5, lekin "abc", "0", "-1", "1.5", "1e3" -> null
+export function parseId(value) {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return null;
+  const n = Number(value);
+  return Number.isSafeInteger(n) && n >= 1 ? n : null;
+}
