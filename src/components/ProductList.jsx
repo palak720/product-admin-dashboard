@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getProducts } from "@/services/productService";
 import { parsePage, parseLimit } from "@/utils/params";
@@ -10,12 +10,12 @@ import ProductTable from "@/components/ProductTable";
 import ProductCard from "@/components/ProductCard";
 import Pagination from "@/components/Pagination";
 
-function ProductList() {
+export default function ProductList() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // URL se values padho (galat value ho toh safe default milta hai)
+  // URL se values padho (safe parse ke saath)
   const page = parsePage(searchParams.get("page"));
   const limit = parseLimit(searchParams.get("limit"));
   const skip = (page - 1) * limit;
@@ -28,7 +28,7 @@ function ProductList() {
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  // URL badalne ka ek hi function
+  // URL badalne ka ek hi function. Aage search/filter/sort bhi isi se honge.
   const updateParams = useCallback(
     (updates, { replace = false } = {}) => {
       const params = new URLSearchParams(searchParams.toString());
@@ -48,10 +48,11 @@ function ProductList() {
   );
 
   function handlePageChange(newPage) {
-    updateParams({ page: newPage === 1 ? null : newPage });
+    updateParams({ page: newPage === 1 ? null : newPage }); // page 1 default hai, URL saaf rakho
   }
 
   function handleLimitChange(newLimit) {
+    // page size badalne par page 1 par wapas
     updateParams({ limit: newLimit === 10 ? null : newLimit, page: null });
   }
 
@@ -130,14 +131,5 @@ function ProductList() {
         />
       )}
     </div>
-  );
-}
-
-// Page yahi export hota hai. useSearchParams ke liye Suspense zaroori hai.
-export default function ProductsPage() {
-  return (
-    <Suspense fallback={<Loader text="Loading products..." />}>
-      <ProductList />
-    </Suspense>
   );
 }
