@@ -1,16 +1,19 @@
+
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { getProducts } from "@/services/productService";
-import { parsePage, parseLimit } from "@/utils/params";
-import useDebounce from "@/hooks/useDebounce"; // NEW
+import { getProducts, getCategories } from "@/services/productService"; // NEW: getCategories
+import { parsePage, parseLimit, parseSort, getSortParams } from "@/utils/params"; // NEW
+import useDebounce from "@/hooks/useDebounce";
 import Loader from "@/components/Loader";
 import ErrorState from "@/components/ErrorState";
 import ProductTable from "@/components/ProductTable";
 import ProductCard from "@/components/ProductCard";
 import Pagination from "@/components/Pagination";
-import SearchBar from "@/components/SearchBar"; // NEW
+import SearchBar from "@/components/SearchBar";
+import CategoryFilter from "@/components/CategoryFilter"; // NEW
+import SortSelect from "@/components/SortSelect"; // NEW
 
 function ProductList() {
   const router = useRouter();
@@ -20,7 +23,10 @@ function ProductList() {
   // URL se values padho
   const page = parsePage(searchParams.get("page"));
   const limit = parseLimit(searchParams.get("limit"));
-  const q = (searchParams.get("q") ?? "").trim(); // NEW
+  const q = (searchParams.get("q") ?? "").trim();
+  const sort = parseSort(searchParams.get("sort")); // NEW
+  // NEW: search aur category ek saath nahi. q ho toh category ignore.
+  const category = q ? "" : (searchParams.get("category") ?? "").trim();
   const skip = (page - 1) * limit;
 
   const [products, setProducts] = useState([]);
@@ -28,8 +34,8 @@ function ProductList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [categories, setCategories] = useState([]); // NEW
 
-  // NEW: input ki apni state (har key par badalti hai), URL nahi
   const [searchInput, setSearchInput] = useState(q);
   const debouncedSearch = useDebounce(searchInput, 500);
 
@@ -61,19 +67,54 @@ function ProductList() {
     updateParams({ limit: newLimit === 10 ? null : newLimit, page: null });
   }
 
-  // NEW: debounced value badle toh URL update karo, aur page 1 par jao
+  // NEW: category chuni -> search saaf, page 1
+  function handleCategoryChange(value) {
+    setSearchInput("");
+    updateParams({ category: value, q: null, page: null });
+  }
+
+  // NEW: sort badla -> page 1
+  function handleSortChange(value) {
+    updateParams({ sort: value, page: null });
+  }
+
+  // NEW: categories ek baar laao (dropdown ke liye)
+  useEffect(() => {
+    let ignore = false;
+    getCategories()
+      .then((list) => {
+        if (!ignore) setCategories(list);
+      })
+      .catch(() => {
+        // dropdown khaali reh jayega, page phir bhi chalega
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  // NEW: ?category=abc jaisi galat value ho toh URL se hata do
+  useEffect(() => {
+    if (!category || categories.length === 0) return;
+    if (!categories.some((c) => c.slug === category)) {
+      updateParams({ category: null, page: null }, { replace: true });
+    }
+  }, [categories, category, updateParams]);
+
+  // Debounced search -> URL
   useEffect(() => {
     const trimmed = debouncedSearch.trim();
-    if (trimmed === q) return; // URL mein pehle se wahi hai, kuch mat karo
-    // replace: har search term history mein na bhare
-    updateParams({ q: trimmed, page: null }, { replace: true });
+    if (trimmed === q) return;
+    const updates = { q: trimmed, page: null };
+    if (trimmed) updates.category = null; // NEW: search shuru, category hatao
+    updateParams(updates, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch]);
 
-  // Data laao jab page, limit ya q badle
+  // Data laao jab page, limit, q, category ya sort badle
   useEffect(() => {
     let ignore = false;
-    const controller = new AbortController(); // NEW
+    const controller = new AbortController();
 
     async function load() {
       setLoading(true);
@@ -83,14 +124,15 @@ function ProductList() {
           limit,
           skip,
           q,
-          signal: controller.signal, // NEW
+          category, // NEW
+          ...getSortParams(sort), // NEW: { sortBy, order } ya khaali
+          signal: controller.signal,
         });
         if (!ignore) {
           setProducts(data.products);
           setTotal(data.total);
         }
       } catch (err) {
-        // NEW: cancel hui request ka error dikhana nahi hai
         if (!ignore) setError(err.message);
       } finally {
         if (!ignore) setLoading(false);
@@ -99,12 +141,11 @@ function ProductList() {
 
     load();
 
-    // NEW: q/page/limit badalne par purani request cancel + purana result ignore
     return () => {
       ignore = true;
       controller.abort();
     };
-  }, [limit, skip, q, reloadKey]);
+  }, [limit, skip, q, category, sort, reloadKey]);
 
   // ?page=999 jaisa out-of-range page: aakhri valid page par bhejo
   useEffect(() => {
@@ -128,7 +169,11 @@ function ProductList() {
   } else if (products.length === 0) {
     content = (
       <p className="text-center py-16 text-gray-500">
-        {q ? `No products found for "${q}".` : "No products found."}
+        {q
+          ? `No products found for "${q}".`
+          : category
+          ? "No products found in this category."
+          : "No products found."}
       </p>
     );
   } else {
@@ -146,10 +191,17 @@ function ProductList() {
 
   return (
     <div className="space-y-4">
-      {/* NEW: title ke saath search bar */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-xl font-semibold">Products</h1>
+      <h1 className="text-xl font-semibold">Products</h1>
+
+      {/* NEW: toolbar mein search + category + sort */}
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
         <SearchBar value={searchInput} onChange={setSearchInput} />
+        <CategoryFilter
+          categories={categories}
+          value={category}
+          onChange={handleCategoryChange}
+        />
+        <SortSelect value={sort} onChange={handleSortChange} />
       </div>
 
       {content}
