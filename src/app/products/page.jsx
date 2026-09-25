@@ -14,6 +14,7 @@ import Pagination from "@/components/Pagination";
 import SearchBar from "@/components/SearchBar";
 import CategoryFilter from "@/components/CategoryFilter"; // NEW
 import SortSelect from "@/components/SortSelect"; // NEW
+import Link from "next/link";
 
 function ProductList() {
   const router = useRouter();
@@ -193,15 +194,23 @@ function ProductList() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Products</h1>
 
-      {/* NEW: toolbar mein search + category + sort */}
-      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
-        <SearchBar value={searchInput} onChange={setSearchInput} />
-        <CategoryFilter
-          categories={categories}
-          value={category}
-          onChange={handleCategoryChange}
-        />
-        <SortSelect value={sort} onChange={handleSortChange} />
+      {/* NEW: toolbar mein search + category + sort + add button */}
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center">
+          <SearchBar value={searchInput} onChange={setSearchInput} />
+          <CategoryFilter
+            categories={categories}
+            value={category}
+            onChange={handleCategoryChange}
+          />
+          <SortSelect value={sort} onChange={handleSortChange} />
+        </div>
+        <Link
+          href="/products/new"
+          className="bg-blue-600 text-white px-4 py-2 rounded text-sm text-center"
+        >
+          + Add Product
+        </Link>
       </div>
 
       {content}

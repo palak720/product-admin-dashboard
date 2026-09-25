@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter, notFound } from "next/navigation";
-import { getProductById } from "@/services/productService";
+import { getProductById, deleteProduct } from "@/services/productService";
 import { parseId } from "@/utils/params";
 import Loader from "@/components/Loader";
 import ErrorState from "@/components/ErrorState";
 import ImageGallery from "@/components/ImageGallery";
 import ReviewList from "@/components/ReviewList";
+import ConfirmDialog from "@/components/ConfirmDialog"; // NEW
 
 export default function ProductDetailsPage() {
   const router = useRouter();
   const params = useParams();
-  const id = parseId(params.id); // number ya null
+  const id = parseId(params.id);
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,9 +22,12 @@ export default function ProductDetailsPage() {
   const [isMissing, setIsMissing] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
-  useEffect(() => {
-    if (id === null) return; // galat id, API call nahi
+  const [confirmOpen, setConfirmOpen] = useState(false); // NEW
+  const [deleting, setDeleting] = useState(false); // NEW
+  const [deleteError, setDeleteError] = useState(""); // NEW
 
+  useEffect(() => {
+    if (id === null) return;
     let ignore = false;
     const controller = new AbortController();
 
@@ -49,13 +54,24 @@ export default function ProductDetailsPage() {
     };
   }, [id, reloadKey]);
 
-  // Back: pichla list page (filters ke saath), direct link khola ho toh /products
   function handleBack() {
     if (window.history.length > 1) router.back();
     else router.push("/products");
   }
 
-  // Hooks ke baad hi: galat ya missing id -> not-found.jsx dikhta hai
+  // NEW: delete confirm
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      await deleteProduct(id);
+      router.push("/products");
+    } catch (err) {
+      setDeleteError(err.message);
+      setDeleting(false);
+    }
+  }
+
   if (id === null || isMissing) notFound();
 
   if (loading) return <Loader text="Loading product..." />;
@@ -68,9 +84,32 @@ export default function ProductDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <button onClick={handleBack} className="text-sm text-blue-600 hover:underline">
-        ← Back to products
-      </button>
+      {/* NEW: top row with Back + Edit/Delete */}
+      <div className="flex items-center justify-between">
+        <button onClick={handleBack} className="text-sm text-blue-600 hover:underline">
+          ← Back to products
+        </button>
+        <div className="flex gap-2">
+          <Link
+            href={`/products/${id}/edit`}
+            className="text-sm border rounded px-3 py-1.5 hover:bg-gray-100"
+          >
+            Edit
+          </Link>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="text-sm border border-red-300 text-red-600 rounded px-3 py-1.5 hover:bg-red-50"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      {deleteError && (
+        <div role="alert" className="bg-red-50 text-red-700 text-sm p-3 rounded">
+          {deleteError}
+        </div>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <ImageGallery images={product.images} title={product.title} />
@@ -107,6 +146,16 @@ export default function ProductDetailsPage() {
         </h2>
         <ReviewList reviews={product.reviews} />
       </section>
+
+      {/* NEW: confirm popup */}
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete this product?"
+        message={`"${product.title}" will be removed from the list. This cannot be undone.`}
+        loading={deleting}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
